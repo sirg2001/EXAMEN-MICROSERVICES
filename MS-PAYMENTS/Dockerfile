@@ -7,7 +7,7 @@ WORKDIR /build
 
 # Copy pom.xml and download dependencies
 COPY pom.xml .
-RUN mvn clean dependency:resolve
+RUN mvn dependency:go-offline -Dmaven.wagon.http.retryHandler.count=3 || mvn dependency:go-offline -Dmaven.wagon.http.retryHandler.count=3
 
 # Copy source code
 COPY src ./src

@@ -1,8 +1,8 @@
 # Stage 1: Build
-FROM maven:3.8-eclipse-temurin-11 as builder
+FROM maven:3.8-eclipse-temurin-11 AS builder
 WORKDIR /build
 COPY pom.xml .
-RUN mvn dependency:go-offline
+RUN mvn dependency:go-offline -Dmaven.wagon.http.retryHandler.count=3 || mvn dependency:go-offline -Dmaven.wagon.http.retryHandler.count=3
 
 COPY src ./src
 RUN mvn clean package -DskipTests
