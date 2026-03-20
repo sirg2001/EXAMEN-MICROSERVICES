@@ -1,18 +1,18 @@
 # =========================================
-# Docker Compose - MS-PROPERTIES
+# Docker Compose - MS-BOOKINGS
 # Déploiement individuel du microservice
 # =========================================
 services:
-  mysql-properties:
+  mysql-bookings:
     image: mysql:8.0
-    container_name: mysql-properties
+    container_name: mysql-bookings
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: ms_properties
+      MYSQL_DATABASE: ms_bookings
       MYSQL_USER: appuser
       MYSQL_PASSWORD: apppass
     ports:
-      - "3306:3306"
+      - "3307:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
       interval: 15s
@@ -20,14 +20,14 @@ services:
       retries: 10
       start_period: 60s
     volumes:
-      - mysql-properties-data:/var/lib/mysql
+      - mysql-bookings-data:/var/lib/mysql
     networks:
-      - properties-network
+      - bookings-network
     command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4
 
   redis:
     image: redis:7-alpine
-    container_name: redis-properties
+    container_name: redis-bookings
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
@@ -37,11 +37,11 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - properties-network
+      - bookings-network
 
   kafka:
     image: confluentinc/cp-kafka:7.3.0
-    container_name: kafka-properties
+    container_name: kafka-bookings
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -61,11 +61,11 @@ services:
       retries: 10
       start_period: 40s
     networks:
-      - properties-network
+      - bookings-network
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.3.0
-    container_name: zookeeper-properties
+    container_name: zookeeper-bookings
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -78,38 +78,39 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - properties-network
+      - bookings-network
 
-  ms-properties:
+  ms-bookings:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ms-properties
+    container_name: ms-bookings
     environment:
-      SPRING_APPLICATION_NAME: ms-properties
-      SERVER_PORT: 8081
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-properties:3306/ms_properties?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_APPLICATION_NAME: ms-bookings
+      SERVER_PORT: 8082
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-bookings:3306/ms_bookings?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MS_PROPERTIES_URL: http://ms-properties:8081/api
     ports:
-      - "8081:8081"
+      - "8082:8082"
     depends_on:
-      mysql-properties:
+      mysql-bookings:
         condition: service_healthy
       redis:
         condition: service_healthy
       kafka:
         condition: service_healthy
     networks:
-      - properties-network
+      - bookings-network
     restart: unless-stopped
 
 networks:
-  properties-network:
+  bookings-network:
     driver: bridge
 
 volumes:
-  mysql-properties-data:
+  mysql-bookings-data:

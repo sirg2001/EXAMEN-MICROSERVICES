@@ -215,6 +215,7 @@ services:
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MS_BOOKINGS_URL: http://ms-bookings:8082/api
       JAVA_OPTS: "-Xmx512m -Xms256m -XX:+UseG1GC"
     ports:
       - "8083:8083"

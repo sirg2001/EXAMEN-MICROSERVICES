@@ -1,18 +1,18 @@
 # =========================================
-# Docker Compose - MS-PROPERTIES
+# Docker Compose - MS-PAYMENTS
 # Déploiement individuel du microservice
 # =========================================
 services:
-  mysql-properties:
+  mysql-payments:
     image: mysql:8.0
-    container_name: mysql-properties
+    container_name: mysql-payments
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: ms_properties
+      MYSQL_DATABASE: ms_payments
       MYSQL_USER: appuser
       MYSQL_PASSWORD: apppass
     ports:
-      - "3306:3306"
+      - "3308:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
       interval: 15s
@@ -20,14 +20,14 @@ services:
       retries: 10
       start_period: 60s
     volumes:
-      - mysql-properties-data:/var/lib/mysql
+      - mysql-payments-data:/var/lib/mysql
     networks:
-      - properties-network
+      - payments-network
     command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4
 
   redis:
     image: redis:7-alpine
-    container_name: redis-properties
+    container_name: redis-payments
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
@@ -37,11 +37,11 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - properties-network
+      - payments-network
 
   kafka:
     image: confluentinc/cp-kafka:7.3.0
-    container_name: kafka-properties
+    container_name: kafka-payments
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -61,11 +61,11 @@ services:
       retries: 10
       start_period: 40s
     networks:
-      - properties-network
+      - payments-network
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.3.0
-    container_name: zookeeper-properties
+    container_name: zookeeper-payments
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -78,38 +78,39 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - properties-network
+      - payments-network
 
-  ms-properties:
+  ms-payments:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ms-properties
+    container_name: ms-payments
     environment:
-      SPRING_APPLICATION_NAME: ms-properties
-      SERVER_PORT: 8081
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-properties:3306/ms_properties?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_APPLICATION_NAME: ms-payments
+      SERVER_PORT: 8083
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-payments:3306/ms_payments?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MS_BOOKINGS_URL: http://ms-bookings:8082/api
     ports:
-      - "8081:8081"
+      - "8083:8083"
     depends_on:
-      mysql-properties:
+      mysql-payments:
         condition: service_healthy
       redis:
         condition: service_healthy
       kafka:
         condition: service_healthy
     networks:
-      - properties-network
+      - payments-network
     restart: unless-stopped
 
 networks:
-  properties-network:
+  payments-network:
     driver: bridge
 
 volumes:
-  mysql-properties-data:
+  mysql-payments-data:

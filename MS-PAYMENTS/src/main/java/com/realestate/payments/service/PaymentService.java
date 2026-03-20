@@ -1,5 +1,6 @@
 package com.realestate.payments.service;
 
+import com.realestate.payments.client.BookingServiceClient;
 import com.realestate.payments.dto.PaymentDTO;
 import com.realestate.payments.entity.Payment;
 import com.realestate.payments.event.ReservationCreatedEvent;
@@ -21,6 +22,9 @@ public class PaymentService {
 
     @Autowired
     private PaymentRepository paymentRepository;
+
+    @Autowired
+    private BookingServiceClient bookingServiceClient;
 
     /**
      * Récupère un paiement par ID avec caching
@@ -67,6 +71,10 @@ public class PaymentService {
     /**
      * ✅ CETTE MÉTHODE EST APPELLÉE PAR LE CONSUMER KAFKA
      * Traite automatiquement un paiement quand un événement de réservation arrive
+     *
+     * 1. Appelle MS-Bookings en SYNCHRONE pour vérifier la réservation ✅
+     * 2. Vérifie qu'il n'y a pas de doublon
+     * 3. Crée et traite le paiement
      */
     @Transactional
     @CacheEvict(value = "payments", allEntries = true)
@@ -74,6 +82,13 @@ public class PaymentService {
         log.info("Processing payment from Kafka event for booking: {}", event.getBookingId());
 
         try {
+            // ✅ COMMUNICATION SYNCHRONE : Vérifier que la réservation existe dans MS-Bookings
+            log.info("Step 1: Synchronous call to MS-Bookings to verify booking...");
+            BookingServiceClient.BookingInfo bookingInfo =
+                    bookingServiceClient.getBookingById(event.getBookingId());
+            log.info("✅ Booking verified: ID={}, Customer={}, Status={}",
+                    bookingInfo.id, bookingInfo.customerEmail, bookingInfo.status);
+
             // Vérifier qu'il n'y a pas déjà un paiement pour cette réservation
             if (paymentRepository.findByBookingId(event.getBookingId()).isPresent()) {
                 log.warn("Payment already exists for booking: {}", event.getBookingId());

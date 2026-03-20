@@ -1,3 +1,7 @@
+# =========================================
+# GitLab CI/CD Pipeline - MS-PROPERTIES
+# =========================================
+
 stages:
   - build
   - package
@@ -8,6 +12,9 @@ variables:
   REGISTRY: docker.io
   IMAGE_NAME: $REGISTRY/$DOCKERHUB_USERNAME/ms-properties
 
+# =========================================
+# Stage 1: Build Maven Project
+# =========================================
 build:
   stage: build
   image: maven:3.8-openjdk-11
@@ -23,6 +30,9 @@ build:
     - main
     - develop
 
+# =========================================
+# Stage 2: Build Docker Image
+# =========================================
 package:
   stage: package
   image: docker:latest
@@ -32,13 +42,16 @@ package:
     - echo "Building Docker image..."
     - docker build -t $IMAGE_NAME:$CI_COMMIT_SHA .
     - docker build -t $IMAGE_NAME:latest .
-    - echo "Image built successfully!"
+    - echo "Docker image built successfully!"
   dependencies:
     - build
   only:
     - main
     - develop
 
+# =========================================
+# Stage 3: Push to Docker Hub
+# =========================================
 push:
   stage: push
   image: docker:latest
