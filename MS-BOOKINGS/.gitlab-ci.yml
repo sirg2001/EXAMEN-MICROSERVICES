@@ -1,0 +1,49 @@
+stages:
+  - build
+  - package
+  - push
+
+variables:
+  DOCKER_DRIVER: overlay2
+  REGISTRY: docker.io
+  IMAGE_NAME: $REGISTRY/$DOCKERHUB_USERNAME/ms-bookings
+
+build:
+  stage: build
+  image: maven:3.8-openjdk-11
+  script:
+    - echo "Building MS-Bookings..."
+    - mvn clean package -DskipTests
+  artifacts:
+    paths:
+      - target/*.jar
+    expire_in: 1 hour
+  only:
+    - main
+    - develop
+
+package:
+  stage: package
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - echo "Building Docker image..."
+    - docker build -t $IMAGE_NAME:$CI_COMMIT_SHA .
+    - docker build -t $IMAGE_NAME:latest .
+  only:
+    - main
+    - develop
+
+push:
+  stage: push
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
+    - docker push $IMAGE_NAME:$CI_COMMIT_SHA
+    - docker push $IMAGE_NAME:latest
+  only:
+    - main
+    - develop

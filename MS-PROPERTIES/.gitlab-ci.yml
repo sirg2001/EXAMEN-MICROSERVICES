@@ -1,0 +1,58 @@
+stages:
+  - build
+  - package
+  - push
+
+variables:
+  DOCKER_DRIVER: overlay2
+  REGISTRY: docker.io
+  IMAGE_NAME: $REGISTRY/$DOCKERHUB_USERNAME/ms-properties
+
+build:
+  stage: build
+  image: maven:3.8-openjdk-11
+  script:
+    - echo "Building MS-Properties..."
+    - mvn clean package -DskipTests
+    - echo "Build completed successfully!"
+  artifacts:
+    paths:
+      - target/*.jar
+    expire_in: 1 hour
+  only:
+    - main
+    - develop
+
+package:
+  stage: package
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - echo "Building Docker image..."
+    - docker build -t $IMAGE_NAME:$CI_COMMIT_SHA .
+    - docker build -t $IMAGE_NAME:latest .
+    - echo "Image built successfully!"
+  dependencies:
+    - build
+  only:
+    - main
+    - develop
+
+push:
+  stage: push
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - echo "Logging in to Docker Hub..."
+    - docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
+    - echo "Pushing image to Docker Hub..."
+    - docker push $IMAGE_NAME:$CI_COMMIT_SHA
+    - docker push $IMAGE_NAME:latest
+    - echo "Image pushed successfully!"
+  dependencies:
+    - package
+  only:
+    - main
+    - develop

@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # MySQL Database for Properties
+  mysql_properties:
+    image: mysql:8
+    container_name: mysql_properties
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ms_properties
+      MYSQL_USER: properties_user
+      MYSQL_PASSWORD: properties_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_properties_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 3s
+      retries: 5
+    networks:
+      - microservices_network
+
+  # Redis for Caching
+  redis_properties:
+    image: redis:7-alpine
+    container_name: redis_properties
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 3s
+      retries: 5
+    networks:
+      - microservices_network
+
+  # MS-Properties Service
+  ms-properties:
+    image: your-docker-hub/ms-properties:latest
+    container_name: ms-properties
+    depends_on:
+      mysql_properties:
+        condition: service_healthy
+      redis_properties:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql_properties:3306/ms_properties
+      SPRING_DATASOURCE_USERNAME: properties_user
+      SPRING_DATASOURCE_PASSWORD: properties_pass
+      SPRING_REDIS_HOST: redis_properties
+      SPRING_REDIS_PORT: 6379
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api"]
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - microservices_network
+    restart: unless-stopped
+
+networks:
+  microservices_network:
+    driver: bridge
+
+volumes:
+  mysql_properties_data:
+    driver: local

@@ -1,0 +1,249 @@
+services:
+  # =========================================
+  # INFRASTRUCTURE - ZOOKEEPER & KAFKA
+  # =========================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - realestate-network
+    healthcheck:
+      test: [ "CMD", "echo", "ruok" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+
+  kafka:
+    image: confluentinc/cp-kafka:7.3.0
+    container_name: kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    networks:
+      - realestate-network
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "kafka-broker-api-versions --bootstrap-server=kafka:29092" ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+
+  # =========================================
+  # CACHING - REDIS
+  # =========================================
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    networks:
+      - realestate-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis-data:/data
+
+  # =========================================
+  # DATABASES - MYSQL INSTANCES
+  # =========================================
+  mysql-properties:
+    image: mysql:8.0
+    container_name: mysql-properties
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ms_properties
+      MYSQL_USER: appuser
+      MYSQL_PASSWORD: apppass
+    ports:
+      - "3306:3306"
+    networks:
+      - realestate-network
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot" ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    volumes:
+      - mysql-properties-data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  mysql-bookings:
+    image: mysql:8.0
+    container_name: mysql-bookings
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ms_bookings
+      MYSQL_USER: appuser
+      MYSQL_PASSWORD: apppass
+    ports:
+      - "3307:3306"
+    networks:
+      - realestate-network
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot" ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    volumes:
+      - mysql-bookings-data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  mysql-payments:
+    image: mysql:8.0
+    container_name: mysql-payments
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ms_payments
+      MYSQL_USER: appuser
+      MYSQL_PASSWORD: apppass
+    ports:
+      - "3308:3306"
+    networks:
+      - realestate-network
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot" ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    volumes:
+      - mysql-payments-data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  # =========================================
+  # MICROSERVICES
+  # =========================================
+  
+  # MS-PROPERTIES: Property Catalog (Port 8081)
+  ms-properties:
+    build:
+      context: ./MS-PROPERTIES
+      dockerfile: Dockerfile
+    container_name: ms-properties
+    environment:
+      SPRING_APPLICATION_NAME: ms-properties
+      SERVER_PORT: 8081
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-properties:3306/ms_properties?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JAVA_OPTS: "-Xmx512m -Xms256m -XX:+UseG1GC"
+    ports:
+      - "8081:8081"
+    networks:
+      - realestate-network
+    depends_on:
+      mysql-properties:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./MS-PROPERTIES/logs:/app/logs
+
+  # MS-BOOKINGS: Reservation Management (Port 8082)
+  ms-bookings:
+    build:
+      context: ./MS-BOOKINGS
+      dockerfile: Dockerfile
+    container_name: ms-bookings
+    environment:
+      SPRING_APPLICATION_NAME: ms-bookings
+      SERVER_PORT: 8082
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-bookings:3306/ms_bookings?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MS_PROPERTIES_URL: http://ms-properties:8081/api
+      JAVA_OPTS: "-Xmx512m -Xms256m -XX:+UseG1GC"
+    ports:
+      - "8082:8082"
+    networks:
+      - realestate-network
+    depends_on:
+      mysql-bookings:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./MS-BOOKINGS/logs:/app/logs
+
+  # MS-PAYMENTS: Payment Processing (Port 8083)
+  ms-payments:
+    build:
+      context: ./MS-PAYMENTS
+      dockerfile: Dockerfile
+    container_name: ms-payments
+    environment:
+      SPRING_APPLICATION_NAME: ms-payments
+      SERVER_PORT: 8083
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-payments:3306/ms_payments?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JAVA_OPTS: "-Xmx512m -Xms256m -XX:+UseG1GC"
+    ports:
+      - "8083:8083"
+    networks:
+      - realestate-network
+    depends_on:
+      mysql-payments:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./MS-PAYMENTS/logs:/app/logs
+
+networks:
+  realestate-network:
+    driver: bridge
+
+volumes:
+  # Zookeeper & Kafka
+  zookeeper-data:
+  zookeeper-logs:
+  kafka-data:
+  
+  # Redis
+  redis-data:
+  
+  # MySQL Databases
+  mysql-properties-data:
+  mysql-bookings-data:
+  mysql-payments-data:
