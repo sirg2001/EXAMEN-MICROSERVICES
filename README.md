@@ -1249,9 +1249,59 @@ Voici le flux complet de logs **chronologiques** lors de la création de la rés
 > **Lien GitLab** : https://gitlab.com/sirg2001-group/EXAMEN-MICROSERVICES  
 > **Lien DockerHub** : https://hub.docker.com/u/sirg2001
 
+#### Captures d'écran du pipeline CI/CD
+
+**Dépôt GitLab :**
+
+![Dépôt GitLab](TEST%20-%20INFO%20-%20CAPTURE/GITLAB%20REPO.png)
+
+**Variables CI/CD configurées (DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, REGISTRY) :**
+
+![Variables CI/CD](TEST%20-%20INFO%20-%20CAPTURE/VARIABLE.png)
+
+**Pipeline 1 — Exécution en cours :**
+
+![Pipeline Running](TEST%20-%20INFO%20-%20CAPTURE/PIPELINE%20RUNNING.png)
+
+![Pipeline In Stage](TEST%20-%20INFO%20-%20CAPTURE/PIPELINE%20IN%20STAGE.png)
+
+**Pipeline 1 — Échec (erreur réseau transitoire sur rocksdbjni) :**
+
+![Pipeline Failed](TEST%20-%20INFO%20-%20CAPTURE/PIPELINE%20FAILED.png)
+
+![Pipeline Failed Description](TEST%20-%20INFO%20-%20CAPTURE/PIPELINE%20FAILED%20(DESC).png)
+
+**Pipeline 2 — Succès après correction des Dockerfiles (Maven retry) :**
+
+![Pipeline 2 Running Success](TEST%20-%20INFO%20-%20CAPTURE/PIPELINE%202%20RUNNING%20SUCCES.png)
+
+![Pipeline 2 In Stage](TEST%20-%20INFO%20-%20CAPTURE/PIPELINE%202%20IN%20STAGE.png)
+
+**Jobs du pipeline (9/9 passed) :**
+
+![Pipeline Jobs Part 1](TEST%20-%20INFO%20-%20CAPTURE/PIPELINE%20JOBS%20PT1.png)
+
+![Pipeline Jobs Part 2](TEST%20-%20INFO%20-%20CAPTURE/PIPELINE%20JOBS%20PT2.png)
+
 ---
 
-### 10. 🔄 Résumé des tests et communications validés
+### 10. 🐳 Captures d'écran — Docker Build & Microservices
+
+**Docker Build (multi-stage) :**
+
+![Docker Build](TEST%20-%20INFO%20-%20CAPTURE/DOCKER%20BUILD.png)
+
+**MS-Bookings Build :**
+
+![MS-Bookings Build](TEST%20-%20INFO%20-%20CAPTURE/MS-BOOKINGS%20BUILD.png)
+
+**MS-Payments Build :**
+
+![MS-Payments Build](TEST%20-%20INFO%20-%20CAPTURE/MS-PAYMENTS%20BUILD.png)
+
+---
+
+### 11. 🔄 Résumé des tests et communications validés
 
 | Test | Résultat | Preuve |
 |------|----------|--------|
@@ -1269,8 +1319,9 @@ Voici le flux complet de logs **chronologiques** lors de la création de la rés
 | Communication SYNC (Bookings→Properties) | ✅ Confirmée | Section 6 |
 | Communication ASYNC (Kafka: Bookings→Payments) | ✅ Confirmée | Section 7 |
 | Logs applicatifs (@Slf4j) | ✅ Détaillés | Section 8 |
-| Pipeline CI/CD GitLab (9/9) | ✅ Tous passés | Section 9 |
-| Images sur DockerHub | ✅ Poussées | Section 9 |
+| Pipeline CI/CD GitLab (9/9) | ✅ Tous passés | Section 9 + captures |
+| Images sur DockerHub | ✅ Poussées | Section 9 + captures |
+| Docker Build | ✅ Screenshots | Section 10 |
 
 ---
 
