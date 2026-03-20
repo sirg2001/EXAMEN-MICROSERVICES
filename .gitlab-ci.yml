@@ -1,0 +1,181 @@
+# =========================================
+# GitLab CI/CD Pipeline - EXAMEN MICROSERVICES
+# Mono-repo: MS-Properties, MS-Bookings, MS-Payments
+# =========================================
+
+stages:
+  - build
+  - package
+  - push
+
+variables:
+  DOCKER_DRIVER: overlay2
+  REGISTRY: docker.io
+
+# ===========================================
+# MS-PROPERTIES
+# ===========================================
+build-properties:
+  stage: build
+  image: maven:3.8-openjdk-11
+  script:
+    - echo "Building MS-Properties..."
+    - cd MS-PROPERTIES
+    - mvn clean package -DskipTests
+    - echo "Build completed successfully!"
+  artifacts:
+    paths:
+      - MS-PROPERTIES/target/*.jar
+    expire_in: 1 hour
+  only:
+    - main
+    - develop
+
+package-properties:
+  stage: package
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - echo "Building Docker image for MS-Properties..."
+    - cd MS-PROPERTIES
+    - docker build -t $REGISTRY/$DOCKERHUB_USERNAME/ms-properties:$CI_COMMIT_SHA .
+    - docker build -t $REGISTRY/$DOCKERHUB_USERNAME/ms-properties:latest .
+    - echo "Docker image built successfully!"
+  dependencies:
+    - build-properties
+  only:
+    - main
+    - develop
+
+push-properties:
+  stage: push
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - echo "Pushing MS-Properties to Docker Hub..."
+    - cd MS-PROPERTIES
+    - docker build -t $REGISTRY/$DOCKERHUB_USERNAME/ms-properties:$CI_COMMIT_SHA .
+    - docker build -t $REGISTRY/$DOCKERHUB_USERNAME/ms-properties:latest .
+    - echo "$DOCKERHUB_TOKEN" | docker login $REGISTRY -u $DOCKERHUB_USERNAME --password-stdin
+    - docker push $REGISTRY/$DOCKERHUB_USERNAME/ms-properties:$CI_COMMIT_SHA
+    - docker push $REGISTRY/$DOCKERHUB_USERNAME/ms-properties:latest
+    - echo "Push completed successfully!"
+  dependencies:
+    - build-properties
+  only:
+    - main
+    - develop
+
+# ===========================================
+# MS-BOOKINGS
+# ===========================================
+build-bookings:
+  stage: build
+  image: maven:3.8-openjdk-11
+  script:
+    - echo "Building MS-Bookings..."
+    - cd MS-BOOKINGS
+    - mvn clean package -DskipTests
+    - echo "Build completed successfully!"
+  artifacts:
+    paths:
+      - MS-BOOKINGS/target/*.jar
+    expire_in: 1 hour
+  only:
+    - main
+    - develop
+
+package-bookings:
+  stage: package
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - echo "Building Docker image for MS-Bookings..."
+    - cd MS-BOOKINGS
+    - docker build -t $REGISTRY/$DOCKERHUB_USERNAME/ms-bookings:$CI_COMMIT_SHA .
+    - docker build -t $REGISTRY/$DOCKERHUB_USERNAME/ms-bookings:latest .
+    - echo "Docker image built successfully!"
+  dependencies:
+    - build-bookings
+  only:
+    - main
+    - develop
+
+push-bookings:
+  stage: push
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - echo "Pushing MS-Bookings to Docker Hub..."
+    - cd MS-BOOKINGS
+    - docker build -t $REGISTRY/$DOCKERHUB_USERNAME/ms-bookings:$CI_COMMIT_SHA .
+    - docker build -t $REGISTRY/$DOCKERHUB_USERNAME/ms-bookings:latest .
+    - echo "$DOCKERHUB_TOKEN" | docker login $REGISTRY -u $DOCKERHUB_USERNAME --password-stdin
+    - docker push $REGISTRY/$DOCKERHUB_USERNAME/ms-bookings:$CI_COMMIT_SHA
+    - docker push $REGISTRY/$DOCKERHUB_USERNAME/ms-bookings:latest
+    - echo "Push completed successfully!"
+  dependencies:
+    - build-bookings
+  only:
+    - main
+    - develop
+
+# ===========================================
+# MS-PAYMENTS
+# ===========================================
+build-payments:
+  stage: build
+  image: maven:3.8-openjdk-11
+  script:
+    - echo "Building MS-Payments..."
+    - cd MS-PAYMENTS
+    - mvn clean package -DskipTests
+    - echo "Build completed successfully!"
+  artifacts:
+    paths:
+      - MS-PAYMENTS/target/*.jar
+    expire_in: 1 hour
+  only:
+    - main
+    - develop
+
+package-payments:
+  stage: package
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - echo "Building Docker image for MS-Payments..."
+    - cd MS-PAYMENTS
+    - docker build -t $REGISTRY/$DOCKERHUB_USERNAME/ms-payments:$CI_COMMIT_SHA .
+    - docker build -t $REGISTRY/$DOCKERHUB_USERNAME/ms-payments:latest .
+    - echo "Docker image built successfully!"
+  dependencies:
+    - build-payments
+  only:
+    - main
+    - develop
+
+push-payments:
+  stage: push
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - echo "Pushing MS-Payments to Docker Hub..."
+    - cd MS-PAYMENTS
+    - docker build -t $REGISTRY/$DOCKERHUB_USERNAME/ms-payments:$CI_COMMIT_SHA .
+    - docker build -t $REGISTRY/$DOCKERHUB_USERNAME/ms-payments:latest .
+    - echo "$DOCKERHUB_TOKEN" | docker login $REGISTRY -u $DOCKERHUB_USERNAME --password-stdin
+    - docker push $REGISTRY/$DOCKERHUB_USERNAME/ms-payments:$CI_COMMIT_SHA
+    - docker push $REGISTRY/$DOCKERHUB_USERNAME/ms-payments:latest
+    - echo "Push completed successfully!"
+  dependencies:
+    - build-payments
+  only:
+    - main
+    - develop
