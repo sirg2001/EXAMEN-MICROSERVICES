@@ -886,7 +886,395 @@ curl http://localhost:8083/actuator/health
 
 ---
 
-## 🚨 Troubleshooting
+## � Captures d'écran des tests effectués
+
+> Section démontrant le bon fonctionnement de tous les services, les communications synchrones et asynchrones, et l'infrastructure Docker.
+
+### 1. 🐳 Docker Compose — Tous les services actifs (9/9 healthy)
+
+```
+$ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+NAMES              STATUS                  PORTS
+ms-bookings        Up 9 hours (healthy)    0.0.0.0:8082->8082/tcp
+ms-payments        Up 9 hours (healthy)    0.0.0.0:8083->8083/tcp
+ms-properties      Up 10 hours (healthy)   0.0.0.0:8081->8081/tcp
+kafka              Up 10 hours (healthy)   0.0.0.0:9092->9092/tcp
+mysql-payments     Up 13 hours (healthy)   33060/tcp, 0.0.0.0:3308->3306/tcp
+mysql-properties   Up 13 hours (healthy)   0.0.0.0:3306->3306/tcp, 33060/tcp
+redis              Up 13 hours (healthy)   0.0.0.0:6379->6379/tcp
+mysql-bookings     Up 13 hours (healthy)   33060/tcp, 0.0.0.0:3307->3306/tcp
+zookeeper          Up 13 hours (healthy)   2888/tcp, 0.0.0.0:2181->2181/tcp, 3888/tcp
+```
+
+**✅ 9 containers tous en status `healthy`** : 3 microservices + 3 bases MySQL + Redis + Kafka + Zookeeper
+
+---
+
+### 2. 📦 Images Docker construites
+
+```
+$ docker images --filter "reference=*ms-*"
+
+REPOSITORY                           TAG       SIZE
+examen-microservices-ms-bookings     latest    393MB
+examen-microservices-ms-payments     latest    397MB
+examen-microservices-ms-properties   latest    393MB
+```
+
+---
+
+### 3. 🏠 Tests API — MS-PROPERTIES (Port 8081)
+
+#### 3.1 POST — Créer une propriété
+
+```
+$ curl -X POST http://localhost:8081/api/properties \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Appartement Tour Eiffel","description":"Bel appartement avec vue",
+       "address":"15 Rue de Paris","city":"Paris","zipCode":75001,"area":80.0,
+       "bedrooms":2,"bathrooms":1,"pricePerNight":200.00,"available":true,
+       "ownerName":"Pierre Dupont","ownerEmail":"pierre@email.com",
+       "ownerPhone":"+33612345678"}'
+
+Response (201 Created):
+{
+  "id": 6,
+  "title": "Appartement Tour Eiffel",
+  "description": "Bel appartement avec vue",
+  "address": "15 Rue de Paris",
+  "city": "Paris",
+  "zipCode": 75001,
+  "area": 80.0,
+  "bedrooms": 2,
+  "bathrooms": 1,
+  "pricePerNight": 200.00,
+  "available": true,
+  "ownerName": "Pierre Dupont",
+  "ownerEmail": "pierre@email.com",
+  "ownerPhone": "+33612345678",
+  "createdAt": "2026-03-20T12:22:43.07938",
+  "updatedAt": "2026-03-20T12:22:43.079402"
+}
+```
+
+#### 3.2 GET — Récupérer une propriété par ID
+
+```
+$ curl http://localhost:8081/api/properties/6
+
+Response (200 OK):
+{
+  "id": 6,
+  "title": "Appartement Tour Eiffel",
+  "description": "Bel appartement avec vue",
+  "address": "15 Rue de Paris",
+  "city": "Paris",
+  "pricePerNight": 200.00,
+  "available": true,
+  ...
+}
+```
+
+#### 3.3 GET — Propriétés disponibles par ville
+
+```
+$ curl http://localhost:8081/api/properties/city/Dakar/available
+
+Response (200 OK):
+[
+  {
+    "id": 1,
+    "title": "Villa Dakar",
+    "city": "Dakar",
+    "pricePerNight": 150.00,
+    "available": true,
+    ...
+  },
+  {
+    "id": 4,
+    "title": "Appartement Almadies",
+    "city": "Dakar",
+    "pricePerNight": 95.00,
+    "available": true,
+    ...
+  }
+]
+```
+
+#### 3.4 PUT — Mettre à jour une propriété
+
+```
+$ curl -X PUT http://localhost:8081/api/properties/1 \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Villa Dakar Renovee","bedrooms":4,"area":140.0,"pricePerNight":180.00,...}'
+
+Response (200 OK):
+{
+  "id": 1,
+  "title": "Villa Dakar Renovee",
+  "bedrooms": 4,
+  "area": 140.0,
+  "pricePerNight": 180.00,
+  "updatedAt": "2026-03-20T12:28:06.005657"
+}
+```
+
+#### 3.5 DELETE — Supprimer une propriété
+
+```
+$ curl -X DELETE http://localhost:8081/api/properties/5
+
+Response: 204 No Content ✅
+```
+
+---
+
+### 4. 📅 Tests API — MS-BOOKINGS (Port 8082)
+
+#### 4.1 POST — Créer une réservation (DÉCLENCHE SYNC + ASYNC)
+
+> Cette requête déclenche automatiquement :
+> 1. **Communication SYNCHRONE** → MS-Bookings appelle MS-Properties pour vérifier la disponibilité
+> 2. **Communication ASYNCHRONE** → MS-Bookings publie un événement Kafka consommé par MS-Payments
+
+```
+$ curl -X POST http://localhost:8082/api/bookings \
+  -H "Content-Type: application/json" \
+  -d '{"propertyId":1,"customerName":"Amadou Ba",
+       "customerEmail":"amadou.ba@email.com","customerPhone":"+221770001122",
+       "checkInDate":"2026-04-01","checkOutDate":"2026-04-05",
+       "numberOfGuests":2,"totalPrice":600.00,"notes":"Test de reservation"}'
+
+Response (201 Created):
+{
+  "id": 7,
+  "propertyId": 1,
+  "customerName": "Amadou Ba",
+  "customerEmail": "amadou.ba@email.com",
+  "customerPhone": "+221770001122",
+  "checkInDate": "2026-04-01",
+  "checkOutDate": "2026-04-05",
+  "numberOfGuests": 2,
+  "totalPrice": 600.00,
+  "status": "PENDING",
+  "notes": "Test de reservation",
+  "createdAt": "2026-03-20T12:24:42.632393",
+  "updatedAt": "2026-03-20T12:24:42.63241"
+}
+```
+
+#### 4.2 GET — Récupérer une réservation par ID
+
+```
+$ curl http://localhost:8082/api/bookings/7
+
+Response (200 OK):
+{
+  "id": 7,
+  "propertyId": 1,
+  "customerName": "Amadou Ba",
+  "customerEmail": "amadou.ba@email.com",
+  "status": "PENDING",
+  "checkInDate": "2026-04-01",
+  "checkOutDate": "2026-04-05",
+  "totalPrice": 600.00
+}
+```
+
+#### 4.3 GET — Lister toutes les réservations
+
+```
+$ curl http://localhost:8082/api/bookings
+
+Response (200 OK):
+[
+  { "id": 1, "customerName": "Ahmed Ba", "propertyId": 1, "status": "PENDING", ... },
+  { "id": 3, "customerName": "Fatou Ndiaye", "propertyId": 1, "status": "PENDING", ... },
+  { "id": 7, "customerName": "Amadou Ba", "propertyId": 1, "status": "PENDING", ... },
+  ... (7 réservations au total)
+]
+```
+
+---
+
+### 5. 💳 Tests API — MS-PAYMENTS (Port 8083)
+
+#### 5.1 GET — Paiement créé automatiquement via Kafka
+
+> Après la création de la réservation #7, le paiement est automatiquement créé par MS-Payments via Kafka :
+
+```
+$ curl http://localhost:8083/api/payments/customer/amadou.ba@email.com
+
+Response (200 OK):
+[
+  {
+    "id": 6,
+    "bookingId": 7,
+    "propertyId": 1,
+    "customerEmail": "amadou.ba@email.com",
+    "amount": 600.00,
+    "status": "COMPLETED",
+    "transactionId": "TXN-1774009485731",
+    "notes": "Auto-processed from reservation: 7",
+    "createdAt": "2026-03-20T12:24:46.96396",
+    "updatedAt": "2026-03-20T12:24:46.963976"
+  }
+]
+```
+
+**✅ Le paiement a été créé automatiquement 4 secondes après la réservation** (12:24:42 → 12:24:46)
+
+#### 5.2 GET — Tous les paiements
+
+```
+$ curl http://localhost:8083/api/payments
+
+Response (200 OK):
+[
+  { "id": 1, "bookingId": 1, "amount": 750.00, "status": "COMPLETED", "transactionId": "TXN-1773972496467" },
+  { "id": 2, "bookingId": 2, "amount": 750.00, "status": "COMPLETED", "transactionId": "TXN-1773972500307" },
+  { "id": 3, "bookingId": 3, "amount": 600.00, "status": "COMPLETED", "transactionId": "TXN-1773972533229" },
+  { "id": 4, "bookingId": 4, "amount": 600.00, "status": "COMPLETED", "transactionId": "TXN-1773972576817" },
+  { "id": 5, "bookingId": 6, "amount": 400.00, "status": "COMPLETED", "transactionId": "TXN-1773975725072" },
+  { "id": 6, "bookingId": 7, "amount": 600.00, "status": "COMPLETED", "transactionId": "TXN-1774009485731" }
+]
+```
+
+---
+
+### 6. 🔗 Preuve de communication SYNCHRONE (MS-Bookings → MS-Properties)
+
+**Logs MS-Bookings** — Appel REST vers MS-Properties pour vérifier la disponibilité :
+
+```
+2026-03-20 12:24:42 - BookingService     - Verifying property availability from MS-Properties...
+2026-03-20 12:24:42 - PropertyServiceClient - Checking availability of property: 1 from MS-Properties
+2026-03-20 12:24:42 - PropertyServiceClient - Property is available: 1
+2026-03-20 12:24:42 - BookingService     - Property 1 is available. Proceeding with booking creation
+```
+
+**Logs MS-Properties** — Réception de l'appel synchrone :
+
+```
+2026-03-20 12:24:42 - PropertyController - GET /api/properties/1/available
+2026-03-20 12:24:42 - PropertyService    - Checking availability for property: 1
+```
+
+**✅ Communication synchrone confirmée** : MS-Bookings appelle MS-Properties via RestTemplate (HTTP GET)
+
+---
+
+### 7. 📨 Preuve de communication ASYNCHRONE (Kafka : MS-Bookings → MS-Payments)
+
+**Logs MS-Bookings** — Publication de l'événement sur Kafka :
+
+```
+2026-03-20 12:24:43 - BookingService           - Publishing reservation created event to Kafka...
+2026-03-20 12:24:43 - ReservationEventProducer  - Publishing reservation created event for booking: 7
+2026-03-20 12:24:43 - ReservationEventProducer  - Reservation event published successfully for booking: 7
+2026-03-20 12:24:43 - BookingService           - Reservation event published to Kafka for booking: 7
+```
+
+**Logs MS-Payments** — Consommation de l'événement Kafka et traitement automatique :
+
+```
+2026-03-20 12:24:44 - ReservationEventConsumer - === RECEIVED EVENT FROM KAFKA ===
+2026-03-20 12:24:44 - ReservationEventConsumer - Booking ID: 7
+2026-03-20 12:24:44 - ReservationEventConsumer - Customer: amadou.ba@email.com
+2026-03-20 12:24:44 - ReservationEventConsumer - Amount: 600.00
+2026-03-20 12:24:44 - ReservationEventConsumer - ====================================
+2026-03-20 12:24:44 - PaymentService           - Processing payment from Kafka event for booking: 7
+2026-03-20 12:24:45 - PaymentService           - Processing payment: Amount=600.00, Customer=amadou.ba@email.com
+2026-03-20 12:24:47 - ReservationEventConsumer - Payment processed successfully for booking: 7
+```
+
+**✅ Communication asynchrone confirmée** : Kafka topic `reservations-topic` transmet les événements entre MS-Bookings (producer) et MS-Payments (consumer)
+
+**Topic Kafka vérifié :**
+```
+$ docker exec kafka kafka-topics --list --bootstrap-server localhost:9092
+
+__consumer_offsets
+reservations-topic    ← Topic utilisé pour la communication asynchrone
+```
+
+---
+
+### 8. 📊 Logs applicatifs — Flux complet d'une réservation
+
+Voici le flux complet de logs **chronologiques** lors de la création de la réservation #7 :
+
+```
+[12:24:42] MS-BOOKINGS   → POST /api/bookings - Creating new booking for property: 1
+[12:24:42] MS-BOOKINGS   → Verifying property availability from MS-Properties...
+[12:24:42] MS-BOOKINGS   → 🔗 SYNC CALL: Checking availability of property: 1
+[12:24:42] MS-PROPERTIES → GET /api/properties/1/available (reçu de MS-Bookings)
+[12:24:42] MS-PROPERTIES → Property 1 is available ✅
+[12:24:42] MS-BOOKINGS   → Property 1 is available. Proceeding with booking creation
+[12:24:43] MS-BOOKINGS   → Booking created successfully with id: 7
+[12:24:43] MS-BOOKINGS   → 📨 ASYNC: Publishing reservation event to Kafka...
+[12:24:43] MS-BOOKINGS   → Reservation event published successfully for booking: 7
+[12:24:44] MS-PAYMENTS   → === RECEIVED EVENT FROM KAFKA === (booking: 7)
+[12:24:44] MS-PAYMENTS   → Processing payment from Kafka event for booking: 7
+[12:24:47] MS-PAYMENTS   → Payment processed successfully for booking: 7 ✅
+```
+
+**Durée totale du flux : ~5 secondes** (de la requête HTTP à la création du paiement)
+
+---
+
+### 9. 🚀 Pipeline CI/CD GitLab — 9/9 Jobs Passed
+
+**Pipeline #2397234693** — Tous les jobs sont passés avec succès :
+
+| Stage | Job | Status |
+|-------|-----|--------|
+| **Build** | build-properties | ✅ Passed |
+| **Build** | build-bookings | ✅ Passed |
+| **Build** | build-payments | ✅ Passed |
+| **Package** | package-properties | ✅ Passed |
+| **Package** | package-bookings | ✅ Passed |
+| **Package** | package-payments | ✅ Passed |
+| **Push** | push-properties | ✅ Passed |
+| **Push** | push-bookings | ✅ Passed |
+| **Push** | push-payments | ✅ Passed |
+
+**Résultat : 9/9 jobs passés** — Images poussées sur DockerHub :
+- `sirg2001/ms-properties:latest`
+- `sirg2001/ms-bookings:latest`
+- `sirg2001/ms-payments:latest`
+
+> **Lien GitLab** : https://gitlab.com/sirg2001-group/EXAMEN-MICROSERVICES  
+> **Lien DockerHub** : https://hub.docker.com/u/sirg2001
+
+---
+
+### 10. 🔄 Résumé des tests et communications validés
+
+| Test | Résultat | Preuve |
+|------|----------|--------|
+| Docker Compose (9 services) | ✅ Tous healthy | Section 1 |
+| POST /api/properties | ✅ 201 Created | Section 3.1 |
+| GET /api/properties/{id} | ✅ 200 OK | Section 3.2 |
+| GET /api/properties/city/{city}/available | ✅ 200 OK | Section 3.3 |
+| PUT /api/properties/{id} | ✅ 200 OK | Section 3.4 |
+| DELETE /api/properties/{id} | ✅ 204 No Content | Section 3.5 |
+| POST /api/bookings (sync + async) | ✅ 201 Created | Section 4.1 |
+| GET /api/bookings/{id} | ✅ 200 OK | Section 4.2 |
+| GET /api/bookings | ✅ 200 OK | Section 4.3 |
+| GET /api/payments/customer/{email} | ✅ 200 OK | Section 5.1 |
+| GET /api/payments | ✅ 200 OK | Section 5.2 |
+| Communication SYNC (Bookings→Properties) | ✅ Confirmée | Section 6 |
+| Communication ASYNC (Kafka: Bookings→Payments) | ✅ Confirmée | Section 7 |
+| Logs applicatifs (@Slf4j) | ✅ Détaillés | Section 8 |
+| Pipeline CI/CD GitLab (9/9) | ✅ Tous passés | Section 9 |
+| Images sur DockerHub | ✅ Poussées | Section 9 |
+
+---
+
+## �🚨 Troubleshooting
 
 ### Service refuse la connexion
 
@@ -943,6 +1331,6 @@ Tous droits réservés à l'institution éducative.
 
 ---
 
-**Dernière mise à jour:** 2024-01-15  
-**Status:** ✅ **PRODUCTION READY**  
+**Dernière mise à jour:** 2026-03-20  
+**Status:** ✅ **PRODUCTION READY — TESTS VALIDÉS**  
 **Version:** 1.0.0
